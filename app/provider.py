@@ -1,34 +1,16 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any, cast
 
 import httpx
 
 from app.models import JsonObject
-
-EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+from app.privacy import sanitize_public_value
 
 
 class ProviderError(RuntimeError):
     pass
-
-
-def _safe_prompt_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            str(key): _safe_prompt_value(item)
-            for key, item in value.items()
-            if "email" not in str(key).casefold()
-        }
-    if isinstance(value, list):
-        return [_safe_prompt_value(item) for item in value]
-    if isinstance(value, tuple):
-        return [_safe_prompt_value(item) for item in value]
-    if isinstance(value, str):
-        return EMAIL_PATTERN.sub("[redacted-email]", value)
-    return value
 
 
 class OpenAICompatibleSynthesizer:
@@ -54,7 +36,7 @@ class OpenAICompatibleSynthesizer:
         result: JsonObject,
         citations: list[JsonObject],
     ) -> str:
-        grounded_payload = _safe_prompt_value(
+        grounded_payload = sanitize_public_value(
             {
                 "question": question,
                 "intent": intent,

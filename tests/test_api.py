@@ -61,6 +61,7 @@ def test_ready_returns_matching_fingerprints(ready_settings: Settings) -> None:
         {"question": "x" * 2001},
         {"question": "Find invoices", "top_k": 0},
         {"question": "Find invoices", "top_k": 21},
+        {"question": "Find invoices", "top_k": True},
         {"question": "Find invoices", "extra": True},
     ],
 )
@@ -71,6 +72,7 @@ def test_ask_rejects_invalid_requests(
     response = TestClient(create_app(ready_settings)).post("/ask", json=payload)
 
     assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "validation_error"
 
 
 def test_ask_matches_shared_service(ready_settings: Settings) -> None:
@@ -89,3 +91,23 @@ def test_ask_matches_shared_service(ready_settings: Settings) -> None:
     assert body["result"] == expected.result
     assert body["warnings"] == expected.to_dict()["warnings"]
     assert body["evidence"]["manifest_sha256"] == expected.evidence.manifest_sha256
+
+
+def test_unexpected_error_is_opaque(
+    ready_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("sensitive implementation detail")
+
+    monkeypatch.setattr(ApplicationService, "ask", fail)
+    response = TestClient(
+        create_app(ready_settings),
+        raise_server_exceptions=False,
+    ).post("/ask", json={"question": "Find invoices"})
+
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert detail["code"] == "internal_error"
+    assert len(detail["correlation_id"]) == 20
+    assert "sensitive" not in response.text

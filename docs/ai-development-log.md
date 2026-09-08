@@ -49,6 +49,8 @@ Two generated implementation assumptions were corrected through tests:
 - cosine ranking alone did not reliably prioritize an explicitly named invoice, so exact invoice-ID matches now precede distance ordering;
 - removing email values was insufficient because `contact_email_*` quality-flag names still entered chunks, so those diagnostics were removed from retrieval text and the chunk version was bumped.
 
+A final independent contract audit found that a user-supplied email could still be echoed into the response and persisted through the manifest's question field. A regression test reproduced the leak before a shared privacy boundary was added; validated questions are now redacted before routing, retrieval, provider use, response serialization, or manifest persistence.
+
 The service keeps complete evidence out of model context, produces deterministic answer IDs and atomically written manifests, and logs operational metadata without questions or sensitive record content. Provider transport and malformed-output failures fall back to deterministic wording without changing metric results.
 
 The final quality gate runs the independent oracle check, Ruff, strict mypy, the offline pytest suite, an artifact build, and the public evaluation command in CI.

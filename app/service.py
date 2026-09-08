@@ -20,6 +20,7 @@ from app.models import (
     ServiceResponse,
     WarningRecord,
 )
+from app.privacy import redact_email_addresses
 from app.provider import OpenAICompatibleSynthesizer, ProviderError
 from app.retrieval import search
 from app.router import route_question
@@ -239,6 +240,7 @@ class ApplicationService:
             raise ValueError("question must not be blank")
         if len(question) > 2_000:
             raise ValueError("question must not exceed 2000 characters")
+        question = redact_email_addresses(question)
         requested_top_k = self._settings.top_k if top_k is None else top_k
         if not 1 <= requested_top_k <= 20:
             raise ValueError("top_k must be between 1 and 20")
