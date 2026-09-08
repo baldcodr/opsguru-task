@@ -1,0 +1,139 @@
+Metadata-Version: 2.4
+Name: cloudnova-invoice-qa
+Version: 0.1.0
+Summary: Hybrid retrieval and deterministic Q&A over CloudNova invoices
+Requires-Python: <3.14,>=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: chromadb==1.0.20
+Requires-Dist: fastapi==0.116.1
+Requires-Dist: httpx==0.28.1
+Requires-Dist: uvicorn==0.35.0
+Provides-Extra: dev
+Requires-Dist: mypy==1.17.1; extra == "dev"
+Requires-Dist: pytest==8.4.1; extra == "dev"
+Requires-Dist: pytest-cov==6.2.1; extra == "dev"
+Requires-Dist: ruff==0.12.8; extra == "dev"
+
+# CloudNova Invoice Q&A
+
+CloudNova Invoice Q&A turns the supplied invoice export into an auditable local data product. It answers the six stakeholder metrics with deterministic full-ledger calculations, retrieves descriptive invoice/account matches from Chroma, and cites the physical CSV rows behind every answer.
+
+The core principle is simple: retrieval finds records; Python computes business metrics. An optional OpenAI-compatible model may phrase a grounded answer, but it never selects evidence or changes structured results.
+
+## Quick Start
+
+Prerequisites: Python 3.12 and [`uv`](https://docs.astral.sh/uv/).
+
+```bash
+uv venv --python 3.12
+uv pip install --python .venv/bin/python -e ".[dev]"
+.venv/bin/python -m app index
+```
+
+The single demo command is:
+
+```bash
+.venv/bin/python -m app ask "How much have we given back in refunds?"
+```
+
+Run `.venv/bin/python -m app` for an interactive prompt. Generated SQLite, Chroma, quality-report, and evidence artifacts live under `.cloudnova/`; the source CSV is never modified.
+
+## What You Get
+
+- Exact 2024 recognized revenue, net of valid refunds.
+- Regional average MRR using list price, seats, discounts, and active account snapshots.
+- Refund totals, Enterprise versus Starter churn, top-five accounts, and pending/failed exposure.
+- Semantic lookup over canonical invoice records.
+- Up to five representative citations plus a complete, hash-verified JSON evidence manifest.
+- Explicit warnings for ambiguous dates, excluded unknowns, anomalies, and provider fallback.
+- Honest refusal when a requested calculation has no approved formula or required source data.
+
+Example structured output:
+
+```bash
+.venv/bin/python -m app ask \
+  "What was our total recognized revenue in USD for paid invoices in 2024?" \
+  --json
+```
+
+## API
+
+```bash
+.venv/bin/python -m app serve
+curl -s http://127.0.0.1:8000/ask \
+  -H 'content-type: application/json' \
+  -d '{"question":"Which region has the highest average MRR per account?","top_k":5}'
+```
+
+`GET /health` reports process health. `GET /ready` separately verifies that SQLite and Chroma fingerprints match the current source and configuration. API documentation is available at `http://127.0.0.1:8000/docs` while the server runs.
+
+## Evaluation
+
+```bash
+.venv/bin/python evals/reference_oracle.py --check
+.venv/bin/python -m app eval
+.venv/bin/python -m pytest -q
+.venv/bin/python -m ruff check app evals tests
+.venv/bin/python -m mypy app evals
+```
+
+The independent standard-library oracle does not import `app`. The public evaluator compares all six structured results and every contributing evidence record against the frozen golden file. It also reports monthly/cohort churn as the required `XFAIL`: the CSV has a current churn flag, but no churn date or historical active periods.
+
+## Architecture
+
+[Open the explorable architecture diagram](docs/architecture.html) or inspect its [Archify source](docs/architecture.archify.json).
+
+```text
+immutable CSV -> normalize/reconcile -> SQLite canonical store -> deterministic metrics
+                                      -> Chroma invoice index  -> semantic lookup
+CLI / FastAPI -> router -> metric or retrieval path -> evidence manifest -> optional phrasing
+```
+
+SQLite owns canonical values and provenance. Chroma stores one non-sensitive document per authoritative invoice using a versioned local feature-hash embedding. Both paths meet in one application service, which creates stable answer IDs and atomic evidence manifests. Source, normalization, chunk, and embedding fingerprints prevent stale artifacts from being served.
+
+The implementation deliberately avoids a general agent framework. The orchestration is small, and direct typed functions make the authority boundary easier to test than an opaque chain: an LLM cannot silently turn five retrieved rows into a supposed ledger total.
+
+## Business Rules
+
+The exact definitions live in [specs/metrics-contract.md](specs/metrics-contract.md). In brief:
+
+- Revenue includes authoritative paid invoices and valid negative refunds; pending, failed, and void invoices contribute zero.
+- Fixed FX rates are USD `1.00`, EUR `1.08`, and GBP `1.27`; sums use `Decimal` and round only for display.
+- MRR is list price times seats times the discount multiplier. Annual billing does not divide or multiply MRR.
+- Account-level MRR and churn use one deterministic latest snapshot per account.
+- Unknown churn is excluded and counted. Pending/failed exposure uses absolute USD amounts.
+
+## Configuration
+
+Defaults are shown in [.env.example](.env.example). Export variables in the shell before running the app; `.env` files are intentionally not loaded implicitly.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CLOUDNOVA_SOURCE_PATH` | `cloudnova_invoices.csv` | Immutable input CSV |
+| `CLOUDNOVA_ARTIFACT_DIR` | `.cloudnova` | Generated local artifacts |
+| `CLOUDNOVA_TOP_K` | `5` | Retrieval result count, 1-20 |
+| `CLOUDNOVA_EMBEDDING_DIMENSIONS` | `384` | Versioned feature-hash dimensions |
+| `CLOUDNOVA_LLM_ENABLED` | `false` | Enable optional hosted phrasing |
+| `CLOUDNOVA_LLM_API_KEY` | empty | Provider bearer token |
+| `CLOUDNOVA_LLM_BASE_URL` | OpenAI v1 URL | Compatible API base URL |
+| `CLOUDNOVA_LLM_MODEL` | empty | Provider model name |
+| `CLOUDNOVA_LLM_TIMEOUT_SECONDS` | `10` | Bounded provider timeout, max 60 |
+
+No key or network access is needed for indexing, deterministic answers, retrieval, tests, or evaluations. Provider failures preserve structured results and add a fallback warning. Contact emails are excluded from chunks, prompts, responses, logs, citations, and manifests.
+
+## Specs and AI Process
+
+Implementation authority is split into the [PRD](specs/PRD.md), [data contract](specs/data-contract.md), [metrics contract](specs/metrics-contract.md), [query contract](specs/query-contract.md), and [evaluation contract](specs/evaluation-contract.md). Requirement traceability and release gates are defined there.
+
+AI steering is preserved in [.github/copilot-instructions.md](.github/copilot-instructions.md). The concise [AI development log](docs/ai-development-log.md) records clarifications, rejected AI suggestions, corrections, and validation decisions.
+
+## Known Limits
+
+- Monthly/cohort churn cannot be reconstructed without churn dates and historical active populations.
+- Local feature hashing is reproducible and lightweight but weaker than a pretrained embedding model on unseen synonyms.
+- Revenue follows the assignment's invoice-level policy, not GAAP revenue deferral or amortization.
+- Fixed FX rates are contractual constants, not live market rates.
+- The API is a local single-process demo with no authentication or multi-tenancy.
+- Hosted prose is convenience only; consumers should treat `result`, citations, warnings, and manifests as authoritative.
+
+With another day, I would benchmark a compact local embedding model against the labeled retrieval cases, add concurrency tests around same-ID manifest writes, and ship container and deployment health configuration without changing the deterministic metric boundary.

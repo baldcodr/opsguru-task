@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "EVAL-001",
+      "question": "What was our total recognized revenue in USD for paid invoices in 2024?",
+      "expected_intent": "recognized_revenue_2024",
+      "expected_status": "pass"
+    },
+    {
+      "id": "EVAL-002",
+      "question": "Which region has the highest average MRR per account?",
+      "expected_intent": "regional_average_mrr",
+      "expected_status": "pass"
+    },
+    {
+      "id": "EVAL-003",
+      "question": "How much have we given back in refunds?",
+      "expected_intent": "refunds_total",
+      "expected_status": "pass"
+    },
+    {
+      "id": "EVAL-004",
+      "question": "What's the churn rate among Enterprise accounts vs Starter?",
+      "expected_intent": "plan_churn_comparison",
+      "expected_status": "pass"
+    },
+    {
+      "id": "EVAL-005",
+      "question": "List the top 5 accounts by revenue, and flag any with CSAT <= 2.",
+      "expected_intent": "top_accounts_revenue",
+      "expected_status": "pass"
+    },
+    {
+      "id": "EVAL-006",
+      "question": "How many invoices are stuck in pending/failed and what's the exposed $?",
+      "expected_intent": "payment_exposure",
+      "expected_status": "pass"
+    },
+    {
+      "id": "EVAL-XFAIL-001",
+      "question": "What was our monthly churn rate throughout 2024?",
+      "expected_intent": "unsupported_metric",
+      "expected_status": "xfail",
+      "reason": "The source has no churn date or historical active-period data."
+    }
+  ]
+}

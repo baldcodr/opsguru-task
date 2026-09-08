@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CloudNova Invoice Q&A Architecture",
+    "locale": "en",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1190, 530]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [60, 40],
+    "cols": 6,
+    "gapX": 65,
+    "gapY": 40,
+    "cellW": 170,
+    "cellH": 72
+  },
+  "components": [
+    {
+      "id": "rawLedger",
+      "type": "external",
+      "label": "Raw Invoice Ledger",
+      "sublabel": "cloudnova_invoices.csv",
+      "row": 0,
+      "col": 0,
+      "size": [170, 72]
+    },
+    {
+      "id": "normalizer",
+      "type": "backend",
+      "label": "Normalize + Deduplicate",
+      "sublabel": "Rules, flags, provenance",
+      "row": 0,
+      "col": 1,
+      "size": [170, 72]
+    },
+    {
+      "id": "canonicalStore",
+      "type": "database",
+      "label": "Canonical SQLite",
+      "sublabel": "Invoices, snapshots, audit",
+      "row": 0,
+      "col": 2,
+      "size": [170, 72]
+    },
+    {
+      "id": "indexPipeline",
+      "type": "backend",
+      "label": "Chunk + Embed",
+      "sublabel": "PII-minimized deterministic vectors",
+      "row": 0,
+      "col": 3,
+      "size": [170, 72]
+    },
+    {
+      "id": "vectorStore",
+      "type": "database",
+      "label": "Chroma Vector Store",
+      "sublabel": "Canonical invoice collection",
+      "row": 0,
+      "col": 4,
+      "size": [170, 72]
+    },
+    {
+      "id": "interfaces",
+      "type": "frontend",
+      "label": "CLI + FastAPI",
+      "sublabel": "python -m app / POST /ask",
+      "row": 2,
+      "col": 0,
+      "size": [170, 72]
+    },
+    {
+      "id": "queryRouter",
+      "type": "backend",
+      "label": "Query Router",
+      "sublabel": "Metric, lookup, unsupported",
+      "row": 2,
+      "col": 1,
+      "size": [170, 72]
+    },
+    {
+      "id": "metricsEngine",
+      "type": "backend",
+      "label": "Metric Engine",
+      "sublabel": "Six approved finance functions",
+      "row": 2,
+      "col": 2,
+      "size": [170, 72]
+    },
+    {
+      "id": "semanticRetriever",
+      "type": "backend",
+      "label": "Semantic Retriever",
+      "sublabel": "Bounded top-k evidence",
+      "row": 3,
+      "col": 4,
+      "size": [170, 72]
+    },
+    {
+      "id": "hostedLlm",
+      "type": "external",
+      "label": "OpenAI-Compatible LLM",
+      "sublabel": "Optional classification + phrasing",
+      "row": 3,
+      "col": 3,
+      "size": [170, 72]
+    },
+    {
+      "id": "responseAssembler",
+      "type": "backend",
+      "label": "Response + Citations",
+      "sublabel": "Structured CLI/API output",
+      "row": 2,
+      "col": 3,
+      "size": [170, 72]
+    },
+    {
+      "id": "evidenceManifests",
+      "type": "database",
+      "label": "Evidence Manifests",
+      "sublabel": "Complete records keyed by answer_id",
+      "row": 1,
+      "col": 3,
+      "size": [170, 72]
+    }
+  ],
+  "connections": [
+    {
+      "id": "read-ledger",
+      "from": "rawLedger",
+      "to": "normalizer",
+      "label": "read rows",
+      "variant": "emphasis"
+    },
+    {
+      "id": "persist-canonical",
+      "from": "normalizer",
+      "to": "canonicalStore",
+      "label": "canonical",
+      "variant": "emphasis"
+    },
+    {
+      "id": "prepare-index",
+      "from": "canonicalStore",
+      "to": "indexPipeline",
+      "label": "index rows"
+    },
+    {
+      "id": "write-vectors",
+      "from": "indexPipeline",
+      "to": "vectorStore",
+      "label": "vectors"
+    },
+    {
+      "id": "submit-question",
+      "from": "interfaces",
+      "to": "queryRouter",
+      "label": "question",
+      "variant": "emphasis"
+    },
+    {
+      "id": "route-metric",
+      "from": "queryRouter",
+      "to": "metricsEngine",
+      "label": "metric",
+      "variant": "emphasis"
+    },
+    {
+      "id": "route-lookup",
+      "from": "queryRouter",
+      "to": "semanticRetriever",
+      "label": "lookup intent",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "id": "scan-canonical",
+      "from": "canonicalStore",
+      "to": "metricsEngine",
+      "label": "full dataset",
+      "labelDy": 24
+    },
+    {
+      "id": "search-vectors",
+      "from": "semanticRetriever",
+      "to": "vectorStore",
+      "label": "cosine top-k"
+    },
+    {
+      "id": "metric-result",
+      "from": "metricsEngine",
+      "to": "responseAssembler",
+      "label": "result",
+      "labelDy": -12
+    },
+    {
+      "id": "retrieval-result",
+      "from": "semanticRetriever",
+      "to": "responseAssembler",
+      "label": "ranked evidence"
+    },
+    {
+      "id": "optional-phrasing",
+      "from": "responseAssembler",
+      "to": "hostedLlm",
+      "label": "optional prose",
+      "labelDy": 24,
+      "fromSide": "bottom",
+      "toSide": "top",
+      "variant": "dashed"
+    },
+    {
+      "id": "write-evidence",
+      "from": "responseAssembler",
+      "to": "evidenceManifests",
+      "label": "write manifest",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Deterministic Authority",
+      "items": [
+        "All six financial metrics scan the complete canonical population",
+        "The hosted model cannot alter arithmetic, evidence, or intent"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Auditable Provenance",
+      "items": [
+        "Every canonical record retains its physical CSV source row",
+        "Responses link concise citations to complete evidence manifests"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Local-First Fallback",
+      "items": [
+        "Ingestion, metrics, retrieval, and offline evals need no API key",
+        "Provider failure returns deterministic answers or ranked evidence"
+      ]
+    }
+  ]
+}
